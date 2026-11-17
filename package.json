@@ -1,29 +1,25 @@
 {
-  "name": "agents-radar",
-  "version": "1.0.0",
+  "name": "ai-research-radar",
+  "version": "2.0.0",
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "tsx src/radar.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
     "manifest": "tsx src/generate-manifest.ts",
-    "notify": "tsx src/notify.ts",
     "notify:feishu": "tsx src/feishu.ts",
-    "close-stale": "tsx src/close-stale-issues.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "prepare": "husky"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
     "js-yaml": "^4.1.1",
-    "marked": "^17.0.4",
-    "openai": "^6.27.0"
+    "marked": "^17.0.4"
   },
   "devDependencies": {
     "@eslint/js": "^9",

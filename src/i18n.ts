@@ -151,6 +151,14 @@ export const FOOTER = {
 // ---------------------------------------------------------------------------
 
 export const REPORT_LABELS: Record<string, string> = {
+  // ── AI research radar (current pipeline) ──
+  "radar-picks": "每日精选 Daily Picks",
+  "radar-llm-agent": "LLM/Agent 领域日报",
+  "radar-rl": "强化学习 RL 领域日报",
+  "radar-rag-nlp": "RAG/NLP 领域日报",
+  "radar-multimodal-cv": "多模态/CV 领域日报",
+  "radar-ai-general": "AI 全领域日报",
+  // ── Legacy agents-radar archives (kept reachable) ──
   "ai-cli": "AI CLI 工具社区动态日报",
   "ai-cli-en": "AI CLI Tools Digest",
   "ai-agents": "AI Agents 生态日报",
@@ -180,6 +188,12 @@ export const REPORT_LABELS: Record<string, string> = {
 };
 
 export const NOTIFY_LABELS: Record<string, Record<Lang, string>> = {
+  "radar-picks": t("每日精选", "Daily Picks"),
+  "radar-llm-agent": t("LLM/Agent 领域", "LLM/Agent"),
+  "radar-rl": t("强化学习 RL", "RL"),
+  "radar-rag-nlp": t("RAG/NLP 领域", "RAG/NLP"),
+  "radar-multimodal-cv": t("多模态/CV 领域", "Multimodal/CV"),
+  "radar-ai-general": t("AI 全领域", "AI General"),
   "ai-cli": t("AI CLI 工具", "AI CLI Tools"),
   "ai-agents": t("AI Agents 生态", "AI Agents Ecosystem"),
   "ai-infra": t("AI 基础设施", "AI Infrastructure"),

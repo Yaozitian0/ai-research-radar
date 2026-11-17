@@ -11,9 +11,15 @@
  *   search        — keyword search across recent reports
  */
 
-const PAGES_URL = "https://duanyytop.github.io/agents-radar";
+const PAGES_URL = "https://yaozitian0.github.io/ai-research-radar";
 
 const REPORT_LABELS: Record<string, string> = {
+  "radar-picks": "Daily Picks (rule-based radar)",
+  "radar-llm-agent": "LLM/Agent Domain",
+  "radar-rl": "Reinforcement Learning Domain",
+  "radar-rag-nlp": "RAG/NLP Domain",
+  "radar-multimodal-cv": "Multimodal/CV Domain",
+  "radar-ai-general": "AI General Domain",
   "ai-cli": "AI CLI Tools Digest (ZH)",
   "ai-cli-en": "AI CLI Tools Digest (EN)",
   "ai-agents": "AI Agents Ecosystem (ZH)",

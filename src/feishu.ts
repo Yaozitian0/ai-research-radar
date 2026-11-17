@@ -1,24 +1,35 @@
 /**
  * Feishu (Lark) notification — reads manifest.json and sends a card message
- * with links to the latest reports. Skips silently if secrets are not set.
+ * with links to the latest reports. Skips silently if the secret is not set.
  *
- * Required env vars:
- *   FEISHU_WEBHOOK_URLS — comma-separated list of custom bot webhook URLs
- *                         (also accepts legacy FEISHU_WEBHOOK_URL for one URL)
- * Optional:
- *   PAGES_URL           — GitHub Pages base URL (defaults to the public deployment)
+ * Env vars (all optional; unset = graceful skip):
+ *   FEISHU_WEBHOOK      — custom bot webhook URL (primary; comma-separated list allowed)
+ *   FEISHU_WEBHOOK_URLS — legacy alias, comma-separated list
+ *   FEISHU_WEBHOOK_URL  — legacy alias, single URL
+ *   PAGES_URL           — GitHub Pages base URL (defaults to this fork's deployment)
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { NOTIFY_LABELS } from "./i18n.ts";
-import type { Highlights } from "./notify.ts";
 
-const PAGES_URL_DEFAULT = "https://duanyytop.github.io/agents-radar";
+/** report id → highlight bullets. */
+export type ReportHighlights = Record<string, string[]>;
+
+export interface Highlights {
+  zh: ReportHighlights;
+  en: ReportHighlights;
+}
+
+const PAGES_URL_DEFAULT = "https://yaozitian0.github.io/ai-research-radar";
 
 function getWebhookUrls(): string[] {
-  const raw = process.env["FEISHU_WEBHOOK_URLS"] ?? process.env["FEISHU_WEBHOOK_URL"] ?? "";
+  const raw =
+    process.env["FEISHU_WEBHOOK"] ??
+    process.env["FEISHU_WEBHOOK_URLS"] ??
+    process.env["FEISHU_WEBHOOK_URL"] ??
+    "";
   return raw
     .split(",")
     .map((u) => u.trim())
@@ -65,7 +76,7 @@ export function buildFeishuMessage(
 ): string {
   const PAGES_URL = (pagesUrl ?? process.env["PAGES_URL"] ?? PAGES_URL_DEFAULT).replace(/\/$/, "");
   const ordered = reports.filter((r) => !r.endsWith("-en"));
-  const lines: string[] = [`📡 **agents-radar · ${date}**`];
+  const lines: string[] = [`📡 **AI 科研雷达 · ${date}**`];
 
   const zhHighlights = highlights?.zh ?? {};
   const enHighlights = highlights?.en ?? {};
@@ -101,7 +112,7 @@ export function buildFeishuMessage(
 async function main(): Promise<void> {
   const urls = getWebhookUrls();
   if (!urls.length) {
-    console.log("[feishu] FEISHU_WEBHOOK_URLS not set — skipping.");
+    console.log("[feishu] FEISHU_WEBHOOK not set — skipping.");
     return;
   }
 
@@ -131,7 +142,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const title = `📡 agents-radar · ${date}`;
+  const title = `📡 AI 科研雷达 · ${date}`;
 
   const content = buildFeishuMessage(date, reports, undefined, highlights);
 

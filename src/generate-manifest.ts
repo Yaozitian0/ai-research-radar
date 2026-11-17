@@ -6,9 +6,17 @@ import { REPORT_LABELS } from "./i18n.ts";
 const DIGESTS_DIR = "digests";
 const MANIFEST_PATH = "manifest.json";
 const FEED_PATH = "feed.xml";
-const SITE_URL = "https://duanyytop.github.io/agents-radar";
+const SITE_URL = "https://yaozitian0.github.io/ai-research-radar";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const REPORT_FILES = [
+  // AI research radar (current pipeline)
+  "radar-picks",
+  "radar-llm-agent",
+  "radar-rl",
+  "radar-rag-nlp",
+  "radar-multimodal-cv",
+  "radar-ai-general",
+  // Legacy agents-radar reports (archives stay reachable)
   "ai-cli",
   "ai-cli-en",
   "ai-agents",
@@ -159,9 +167,9 @@ async function main(): Promise<void> {
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">\n` +
     `  <channel>\n` +
-    `    <title>agents-radar</title>\n` +
+    `    <title>AI Research Radar</title>\n` +
     `    <link>${SITE_URL}</link>\n` +
-    `    <description>AI 开源生态每日简报 · Daily AI ecosystem digest</description>\n` +
+    `    <description>AI 科研雷达 · 每日五领域精选(规则评分,零付费) · Daily AI research radar</description>\n` +
     `    <language>zh-CN</language>\n` +
     `    <atom:link href="${SITE_URL}/feed.xml" rel="self" type="application/rss+xml"/>\n` +
     `    <lastBuildDate>${buildDate}</lastBuildDate>\n` +

@@ -1,8 +1,9 @@
 /**
  * ArXiv AI papers fetched via the ArXiv API (Atom feed).
  *
- * Strategy: query cs.AI + cs.CL + cs.LG categories for the newest papers,
- * sorted by submission date, filtered to last 48h.
+ * Strategy: query the configured categories (default cs.AI + cs.CL + cs.LG +
+ * cs.CV + cs.IR) for the newest papers, sorted by submission date, filtered
+ * to last 48h.
  */
 
 // ---------------------------------------------------------------------------
@@ -19,6 +20,8 @@ export interface ArxivPaper {
   categories: string[];
   url: string;
   pdfUrl: string;
+  /** arXiv comment field — often carries venue acceptance and code links. */
+  comment: string;
 }
 
 export interface ArxivData {
@@ -30,14 +33,17 @@ export interface ArxivData {
 // Constants
 // ---------------------------------------------------------------------------
 
-const ARXIV_MAX_RESULTS = 50;
+const ARXIV_MAX_RESULTS = 100;
 const API_URL = "https://export.arxiv.org/api/query";
 
-/** ArXiv categories to search. */
-const CATEGORIES = ["cs.AI", "cs.CL", "cs.LG"];
+/** Default arXiv categories to search (overridable via config.yml). */
+const CATEGORIES = ["cs.AI", "cs.CL", "cs.LG", "cs.CV", "cs.IR"];
 
-/** Delay between requests (ArXiv asks for 3s). */
-const REQUEST_DELAY_MS = 3000;
+/** Delay between requests (ArXiv asks for 3s; 4s leaves headroom). */
+const REQUEST_DELAY_MS = 4000;
+/** On HTTP 429, wait this long before retrying (ArXiv throttles bursts). */
+const RETRY_429_DELAY_MS = 15000;
+const MAX_429_RETRIES = 2;
 
 // ---------------------------------------------------------------------------
 // XML helpers (lightweight, no dependency)
@@ -69,12 +75,6 @@ function extractAttr(xml: string, tag: string, attr: string): string[] {
   return results;
 }
 
-function extractLinkHref(xml: string, rel: string): string {
-  const re = new RegExp(`<link[^>]*rel="${rel}"[^>]*href="([^"]*)"[^>]*/?>`, "g");
-  const m = re.exec(xml);
-  return m ? m[1]! : "";
-}
-
 // ---------------------------------------------------------------------------
 // Parse
 // ---------------------------------------------------------------------------
@@ -91,9 +91,10 @@ function parseEntry(entryXml: string): ArxivPaper | null {
   const categories = extractAttr(entryXml, "category", "term");
 
   const url = id; // ArXiv id IS the URL (e.g. http://arxiv.org/abs/...)
-  const pdfUrl = extractLinkHref(entryXml, "related") || id.replace("/abs/", "/pdf/");
+  const pdfUrl = id.replace("/abs/", "/pdf/");
+  const comment = extractTag(entryXml, "arxiv:comment").replace(/\s+/g, " ");
 
-  return { id, title, summary, authors, published, updated, categories, url, pdfUrl };
+  return { id, title, summary, authors, published, updated, categories, url, pdfUrl, comment };
 }
 
 // ---------------------------------------------------------------------------
@@ -104,11 +105,11 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function fetchArxivData(): Promise<ArxivData> {
+export async function fetchArxivData(categories: string[] = CATEGORIES): Promise<ArxivData> {
   const seen = new Map<string, ArxivPaper>();
 
-  for (let i = 0; i < CATEGORIES.length; i++) {
-    const cat = CATEGORIES[i]!;
+  for (let i = 0; i < categories.length; i++) {
+    const cat = categories[i]!;
     if (i > 0) await sleep(REQUEST_DELAY_MS);
 
     try {
@@ -119,12 +120,22 @@ export async function fetchArxivData(): Promise<ArxivData> {
         max_results: String(ARXIV_MAX_RESULTS),
       });
 
-      const resp = await fetch(`${API_URL}?${params}`, {
-        headers: { "User-Agent": "agents-radar/1.0" },
-      });
+      let resp: Response | null = null;
+      for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+        resp = await fetch(`${API_URL}?${params}`, {
+          headers: { "User-Agent": "ai-research-radar/1.0" },
+        });
+        if (resp.status !== 429) break;
+        if (attempt < MAX_429_RETRIES) {
+          console.error(
+            `  [arxiv] ${cat}: HTTP 429 — retry ${attempt + 1}/${MAX_429_RETRIES} in ${RETRY_429_DELAY_MS / 1000}s`,
+          );
+          await sleep(RETRY_429_DELAY_MS);
+        }
+      }
 
-      if (!resp.ok) {
-        console.error(`  [arxiv] ${cat}: HTTP ${resp.status}`);
+      if (!resp || !resp.ok) {
+        console.error(`  [arxiv] ${cat}: HTTP ${resp?.status ?? "no response"}`);
         continue;
       }
 
@@ -150,7 +161,7 @@ export async function fetchArxivData(): Promise<ArxivData> {
   const papers = [...seen.values()]
     .filter((p) => new Date(p.published).getTime() > cutoff)
     .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime())
-    .slice(0, ARXIV_MAX_RESULTS);
+    .slice(0, ARXIV_MAX_RESULTS * categories.length);
 
   console.log(`  [arxiv] ${papers.length} papers (from ${seen.size} unique)`);
   return { papers, fetchSuccess: papers.length > 0 };

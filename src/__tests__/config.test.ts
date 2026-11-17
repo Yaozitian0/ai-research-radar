@@ -1,127 +1,73 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import fs from "node:fs";
-import { toRepoConfig, loadConfig } from "../config.ts";
+import { loadRadarConfig, DEFAULT_ARXIV_CATEGORIES, DEFAULT_RSS_FEEDS } from "../config.ts";
 
-// ---------------------------------------------------------------------------
-// toRepoConfig
-// ---------------------------------------------------------------------------
-
-describe("toRepoConfig", () => {
-  it("converts a basic entry", () => {
-    const result = toRepoConfig({ id: "test", repo: "org/test", name: "Test" });
-    expect(result).toEqual({ id: "test", repo: "org/test", name: "Test" });
-  });
-
-  it("includes paginated when true", () => {
-    const result = toRepoConfig({ id: "test", repo: "org/test", name: "Test", paginated: true });
-    expect(result).toEqual({ id: "test", repo: "org/test", name: "Test", paginated: true });
-  });
-
-  it("omits paginated when false", () => {
-    const result = toRepoConfig({ id: "test", repo: "org/test", name: "Test", paginated: false });
-    expect(result).not.toHaveProperty("paginated");
-  });
-
-  it("includes discussions when true", () => {
-    const result = toRepoConfig({ id: "test", repo: "org/test", name: "Test", discussions: true });
-    expect(result).toEqual({ id: "test", repo: "org/test", name: "Test", discussions: true });
-  });
-
-  it("omits discussions when false", () => {
-    const result = toRepoConfig({ id: "test", repo: "org/test", name: "Test", discussions: false });
-    expect(result).not.toHaveProperty("discussions");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// loadConfig
-// ---------------------------------------------------------------------------
-
-describe("loadConfig", () => {
+describe("loadRadarConfig", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("returns defaults when config file does not exist", () => {
+  it("returns defaults when the file is missing", () => {
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
-    const config = loadConfig("/nonexistent/config.yml");
-    expect(config.cliRepos.length).toBeGreaterThan(0);
-    expect(config.skillsRepo).toBe("anthropics/skills");
-    expect(config.openclaw.id).toBe("openclaw");
-    expect(config.openclawPeers.length).toBeGreaterThan(0);
-    expect(config.infraRepos.length).toBeGreaterThan(0);
+    const cfg = loadRadarConfig("missing.yml");
+    expect(cfg.pickCount).toBe(12);
+    expect(cfg.arxivCategories).toEqual(DEFAULT_ARXIV_CATEGORIES);
+    expect(cfg.rssFeeds).toEqual(DEFAULT_RSS_FEEDS);
   });
 
-  it("loads infra_repos from valid YAML", () => {
+  it("loads pick_count, categories and feeds from yaml", () => {
     vi.spyOn(fs, "existsSync").mockReturnValue(true);
     vi.spyOn(fs, "readFileSync").mockReturnValue(`
-infra_repos:
-  - id: custom-engine
-    repo: org/custom-engine
-    name: Custom Engine
-    paginated: true
+radar:
+  pick_count: 15
+  arxiv_categories:
+    - cs.AI
+    - cs.CL
+  rss_feeds:
+    - name: Test Lab
+      url: https://example.com/feed.xml
 `);
-    const config = loadConfig("test.yml");
-    expect(config.infraRepos).toEqual([
-      { id: "custom-engine", repo: "org/custom-engine", name: "Custom Engine", paginated: true },
-    ]);
+    const cfg = loadRadarConfig("test.yml");
+    expect(cfg.pickCount).toBe(15);
+    expect(cfg.arxivCategories).toEqual(["cs.AI", "cs.CL"]);
+    expect(cfg.rssFeeds).toEqual([{ name: "Test Lab", url: "https://example.com/feed.xml" }]);
   });
 
-  it("falls back to defaults for empty infra_repos", () => {
+  it("clamps pick_count into 10–15", () => {
     vi.spyOn(fs, "existsSync").mockReturnValue(true);
-    vi.spyOn(fs, "readFileSync").mockReturnValue("infra_repos: []");
-    const config = loadConfig("test.yml");
-    expect(config.infraRepos.length).toBeGreaterThan(0);
-    expect(config.infraRepos[0]!.id).toBe("vllm");
+    vi.spyOn(fs, "readFileSync").mockReturnValue("radar:\n  pick_count: 3\n");
+    expect(loadRadarConfig("test.yml").pickCount).toBe(10);
+    vi.spyOn(fs, "readFileSync").mockReturnValue("radar:\n  pick_count: 99\n");
+    expect(loadRadarConfig("test.yml").pickCount).toBe(15);
   });
 
-  it("loads cli_repos from valid YAML", () => {
+  it("falls back per-section when sections are absent or invalid", () => {
+    vi.spyOn(fs, "existsSync").mockReturnValue(true);
+    vi.spyOn(fs, "readFileSync").mockReturnValue("radar:\n  pick_count: not-a-number\n  rss_feeds: []\n");
+    const cfg = loadRadarConfig("test.yml");
+    expect(cfg.pickCount).toBe(12);
+    expect(cfg.arxivCategories).toEqual(DEFAULT_ARXIV_CATEGORIES);
+    expect(cfg.rssFeeds).toEqual(DEFAULT_RSS_FEEDS);
+  });
+
+  it("drops malformed feed entries", () => {
     vi.spyOn(fs, "existsSync").mockReturnValue(true);
     vi.spyOn(fs, "readFileSync").mockReturnValue(`
-cli_repos:
-  - id: custom
-    repo: org/custom
-    name: Custom Tool
-skills_repo: custom/skills
+radar:
+  rss_feeds:
+    - name: Good
+      url: https://example.com/rss
+    - name: NoUrl
 `);
-    const config = loadConfig("test.yml");
-    expect(config.cliRepos).toHaveLength(1);
-    expect(config.cliRepos[0]!.id).toBe("custom");
-    expect(config.skillsRepo).toBe("custom/skills");
+    const cfg = loadRadarConfig("test.yml");
+    expect(cfg.rssFeeds).toEqual([{ name: "Good", url: "https://example.com/rss" }]);
   });
 
-  it("falls back to defaults for empty cli_repos", () => {
+  it("defaults when the radar section is absent", () => {
     vi.spyOn(fs, "existsSync").mockReturnValue(true);
-    vi.spyOn(fs, "readFileSync").mockReturnValue("cli_repos: []");
-    const config = loadConfig("test.yml");
-    expect(config.cliRepos.length).toBeGreaterThan(0);
-    expect(config.cliRepos[0]!.id).toBe("claude-code");
-  });
-
-  it("falls back to defaults for empty skills_repo", () => {
-    vi.spyOn(fs, "existsSync").mockReturnValue(true);
-    vi.spyOn(fs, "readFileSync").mockReturnValue("skills_repo: ''");
-    const config = loadConfig("test.yml");
-    expect(config.skillsRepo).toBe("anthropics/skills");
-  });
-
-  it("parses openclaw from YAML", () => {
-    vi.spyOn(fs, "existsSync").mockReturnValue(true);
-    vi.spyOn(fs, "readFileSync").mockReturnValue(`
-openclaw:
-  id: myclaw
-  repo: org/myclaw
-  name: MyClaw
-  paginated: true
-`);
-    const config = loadConfig("test.yml");
-    expect(config.openclaw).toEqual({ id: "myclaw", repo: "org/myclaw", name: "MyClaw", paginated: true });
-  });
-
-  it("falls back to default openclaw when incomplete", () => {
-    vi.spyOn(fs, "existsSync").mockReturnValue(true);
-    vi.spyOn(fs, "readFileSync").mockReturnValue("openclaw:\n  id: partial\n");
-    const config = loadConfig("test.yml");
-    expect(config.openclaw.id).toBe("openclaw"); // default
+    vi.spyOn(fs, "readFileSync").mockReturnValue("other: true\n");
+    const cfg = loadRadarConfig("test.yml");
+    expect(cfg.pickCount).toBe(12);
+    expect(cfg.rssFeeds.length).toBeGreaterThan(0);
   });
 });

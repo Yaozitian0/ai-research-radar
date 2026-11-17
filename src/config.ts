@@ -1,138 +1,77 @@
 /**
- * Loads and validates agents-radar configuration from config.yml.
- * Falls back to built-in defaults if the file is missing or a section is absent.
+ * Loads ai-research-radar configuration from config.yml.
+ * Falls back to built-in defaults when the file or a section is missing.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import type { RepoConfig } from "./github.ts";
+import type { RadarConfig } from "./radar/types.ts";
 
-// ---------------------------------------------------------------------------
-// Schema types
-// ---------------------------------------------------------------------------
-
-interface RawRepoEntry {
-  id: string;
-  repo: string;
-  name: string;
-  paginated?: boolean;
-  discussions?: boolean;
+interface RawFeed {
+  name?: string;
+  url?: string;
 }
 
 interface RawConfig {
-  cli_repos?: RawRepoEntry[];
-  skills_repo?: string;
-  openclaw?: RawRepoEntry;
-  openclaw_peers?: RawRepoEntry[];
-  infra_repos?: RawRepoEntry[];
-}
-
-export interface RadarConfig {
-  cliRepos: RepoConfig[];
-  skillsRepo: string;
-  openclaw: RepoConfig;
-  openclawPeers: RepoConfig[];
-  infraRepos: RepoConfig[];
-}
-
-// ---------------------------------------------------------------------------
-// Defaults (mirrors the original hard-coded values)
-// ---------------------------------------------------------------------------
-
-const DEFAULT_CLI_REPOS: RepoConfig[] = [
-  { id: "claude-code", repo: "anthropics/claude-code", name: "Claude Code" },
-  { id: "codex", repo: "openai/codex", name: "OpenAI Codex", discussions: true },
-  { id: "gemini-cli", repo: "google-gemini/gemini-cli", name: "Gemini CLI" },
-  { id: "copilot-cli", repo: "github/copilot-cli", name: "GitHub Copilot CLI" },
-  { id: "opencode", repo: "anomalyco/opencode", name: "OpenCode" },
-  { id: "pi", repo: "earendil-works/pi", name: "Pi", discussions: true },
-  { id: "qwen-code", repo: "QwenLM/qwen-code", name: "Qwen Code" },
-];
-
-const DEFAULT_SKILLS_REPO = "anthropics/skills";
-
-const DEFAULT_OPENCLAW: RepoConfig = {
-  id: "openclaw",
-  repo: "openclaw/openclaw",
-  name: "OpenClaw",
-  paginated: true,
-};
-
-const DEFAULT_OPENCLAW_PEERS: RepoConfig[] = [
-  { id: "hermes-agent", repo: "nousresearch/hermes-agent", name: "Hermes Agent" },
-  { id: "ironclaw", repo: "nearai/ironclaw", name: "IronClaw" },
-  { id: "qwenpaw", repo: "agentscope-ai/QwenPaw", name: "QwenPaw" },
-  { id: "zeroclaw", repo: "zeroclaw-labs/zeroclaw", name: "ZeroClaw" },
-];
-
-// Inference engines, gateways and fine-tuning frameworks — the layer the CLI
-// agents run on top of. High daily volume, so most are paginated.
-const DEFAULT_INFRA_REPOS: RepoConfig[] = [
-  { id: "vllm", repo: "vllm-project/vllm", name: "vLLM", paginated: true },
-  { id: "sglang", repo: "sgl-project/sglang", name: "SGLang", paginated: true },
-  { id: "llama-cpp", repo: "ggml-org/llama.cpp", name: "llama.cpp", paginated: true },
-  { id: "ollama", repo: "ollama/ollama", name: "Ollama" },
-  { id: "litellm", repo: "BerriAI/litellm", name: "LiteLLM", paginated: true },
-  { id: "unsloth", repo: "unslothai/unsloth", name: "Unsloth", paginated: true },
-];
-
-// ---------------------------------------------------------------------------
-// Loader
-// ---------------------------------------------------------------------------
-
-export function toRepoConfig(e: RawRepoEntry): RepoConfig {
-  return {
-    id: e.id,
-    repo: e.repo,
-    name: e.name,
-    ...(e.paginated ? { paginated: true } : {}),
-    ...(e.discussions ? { discussions: true } : {}),
+  radar?: {
+    pick_count?: number;
+    arxiv_categories?: string[];
+    rss_feeds?: RawFeed[];
   };
 }
 
-export function loadConfig(configPath = "config.yml"): RadarConfig {
+export const DEFAULT_ARXIV_CATEGORIES = ["cs.AI", "cs.CL", "cs.LG", "cs.CV", "cs.IR"];
+
+export const DEFAULT_RSS_FEEDS: { name: string; url: string }[] = [
+  { name: "OpenAI", url: "https://openai.com/news/rss.xml" },
+  { name: "Google DeepMind", url: "https://deepmind.google/blog/rss.xml" },
+  { name: "Google AI", url: "https://blog.google/technology/ai/rss/" },
+  { name: "Microsoft Research", url: "https://www.microsoft.com/en-us/research/feed/" },
+  { name: "BAIR (Berkeley)", url: "https://bair.berkeley.edu/blog/feed.xml" },
+  { name: "Stanford AI", url: "https://ai.stanford.edu/blog/feed.xml" },
+  { name: "CMU ML", url: "https://blog.ml.cmu.edu/feed/" },
+  { name: "Hugging Face Blog", url: "https://huggingface.co/blog/feed.xml" },
+];
+
+const DEFAULT_PICK_COUNT = 12;
+
+export function loadRadarConfig(configPath = "config.yml"): RadarConfig {
   const resolved = path.resolve(configPath);
+  const defaults: RadarConfig = {
+    pickCount: DEFAULT_PICK_COUNT,
+    arxivCategories: DEFAULT_ARXIV_CATEGORIES,
+    rssFeeds: DEFAULT_RSS_FEEDS,
+  };
 
   if (!fs.existsSync(resolved)) {
     console.log(`[config] ${configPath} not found — using built-in defaults.`);
-    return {
-      cliRepos: DEFAULT_CLI_REPOS,
-      skillsRepo: DEFAULT_SKILLS_REPO,
-      openclaw: DEFAULT_OPENCLAW,
-      openclawPeers: DEFAULT_OPENCLAW_PEERS,
-      infraRepos: DEFAULT_INFRA_REPOS,
-    };
+    return defaults;
   }
 
-  const raw = yaml.load(fs.readFileSync(resolved, "utf-8")) as RawConfig;
+  const raw = yaml.load(fs.readFileSync(resolved, "utf-8")) as RawConfig | null;
+  const radar = raw?.radar ?? {};
 
-  const cliRepos =
-    Array.isArray(raw?.cli_repos) && raw.cli_repos.length > 0
-      ? raw.cli_repos.map(toRepoConfig)
-      : DEFAULT_CLI_REPOS;
+  const pickCount =
+    typeof radar.pick_count === "number" && Number.isFinite(radar.pick_count)
+      ? Math.max(10, Math.min(15, Math.round(radar.pick_count)))
+      : DEFAULT_PICK_COUNT;
 
-  const skillsRepo =
-    typeof raw?.skills_repo === "string" && raw.skills_repo.trim()
-      ? raw.skills_repo.trim()
-      : DEFAULT_SKILLS_REPO;
+  const arxivCategories =
+    Array.isArray(radar.arxiv_categories) && radar.arxiv_categories.length > 0
+      ? radar.arxiv_categories.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+      : DEFAULT_ARXIV_CATEGORIES;
 
-  const openclaw = raw?.openclaw?.id && raw.openclaw.repo ? toRepoConfig(raw.openclaw) : DEFAULT_OPENCLAW;
-
-  const openclawPeers =
-    Array.isArray(raw?.openclaw_peers) && raw.openclaw_peers.length > 0
-      ? raw.openclaw_peers.map(toRepoConfig)
-      : DEFAULT_OPENCLAW_PEERS;
-
-  const infraRepos =
-    Array.isArray(raw?.infra_repos) && raw.infra_repos.length > 0
-      ? raw.infra_repos.map(toRepoConfig)
-      : DEFAULT_INFRA_REPOS;
+  const rssFeeds =
+    Array.isArray(radar.rss_feeds) && radar.rss_feeds.length > 0
+      ? radar.rss_feeds
+          .filter((f): f is { name: string; url: string } => Boolean(f?.name && f?.url))
+          .map((f) => ({ name: f.name, url: f.url }))
+      : DEFAULT_RSS_FEEDS;
 
   console.log(
-    `[config] Loaded from ${configPath}: ` +
-      `${cliRepos.length} CLI repos, ${openclawPeers.length} OpenClaw peers, ${infraRepos.length} infra repos`,
+    `[config] Loaded from ${configPath}: pick_count=${pickCount}, ` +
+      `${arxivCategories.length} arXiv categories, ${rssFeeds.length} RSS feeds`,
   );
-
-  return { cliRepos, skillsRepo, openclaw, openclawPeers, infraRepos };
+  return { pickCount, arxivCategories, rssFeeds };
 }

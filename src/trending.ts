@@ -45,6 +45,16 @@ const SEARCH_QUERIES = [
   { q: "topic:machine-learning", label: "ml" },
 ];
 
+/** Newly created repos (last 7 days), labelled "new:<topic>" downstream. */
+const NEW_REPO_QUERIES = [
+  { q: "topic:llm", label: "new:llm" },
+  { q: "topic:ai-agent", label: "new:ai-agent" },
+  { q: "topic:rag", label: "new:rag" },
+  { q: "topic:reinforcement-learning", label: "new:rl" },
+  { q: "topic:multimodal", label: "new:multimodal" },
+  { q: "large language model", label: "new:llm-text" },
+];
+
 // ---------------------------------------------------------------------------
 // GitHub Trending HTML fetch
 // ---------------------------------------------------------------------------
@@ -141,7 +151,10 @@ interface SearchApiResponse {
   items: SearchApiItem[];
 }
 
-async function searchAiRepos(sevenDaysAgo: string): Promise<SearchRepo[]> {
+async function searchAiRepos(
+  queries: { q: string; label: string }[],
+  dateQualifier: string,
+): Promise<SearchRepo[]> {
   const token = process.env["GITHUB_TOKEN"] ?? "";
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -153,9 +166,12 @@ async function searchAiRepos(sevenDaysAgo: string): Promise<SearchRepo[]> {
   const all: SearchRepo[] = [];
 
   await Promise.all(
-    SEARCH_QUERIES.map(async ({ q, label }) => {
+    queries.map(async ({ q, label }, idx) => {
+      // Small stagger so unauthenticated search rate limits (10/min) are less
+      // likely to bite; with a token the limit is 30/min.
+      await new Promise((r) => setTimeout(r, idx * 350));
       try {
-        const query = `${q}+pushed:>${sevenDaysAgo}&sort=stars&order=desc`;
+        const query = `${q}+${dateQualifier}&sort=stars&order=desc`;
         const url = `https://api.github.com/search/repositories?q=${query}&per_page=15`;
         const resp = await fetch(url, { headers });
         if (!resp.ok) {
@@ -196,10 +212,20 @@ async function searchAiRepos(sevenDaysAgo: string): Promise<SearchRepo[]> {
 export async function fetchTrendingData(): Promise<TrendingData> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [{ repos: trendingRepos, success }, searchRepos] = await Promise.all([
+  const [{ repos: trendingRepos, success }, activeRepos, newRepos] = await Promise.all([
     fetchGitHubTrending(),
-    searchAiRepos(sevenDaysAgo),
+    searchAiRepos(SEARCH_QUERIES, `pushed:>${sevenDaysAgo}`),
+    searchAiRepos(NEW_REPO_QUERIES, `created:>${sevenDaysAgo}`),
   ]);
+
+  const seen = new Set<string>();
+  const searchRepos: SearchRepo[] = [];
+  for (const r of [...activeRepos, ...newRepos]) {
+    if (!seen.has(r.fullName)) {
+      seen.add(r.fullName);
+      searchRepos.push(r);
+    }
+  }
 
   return { trendingRepos, searchRepos, trendingFetchSuccess: success };
 }

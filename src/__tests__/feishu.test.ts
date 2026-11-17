@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { buildFeishuMessage } from "../feishu.ts";
-import type { Highlights } from "../notify.ts";
+import type { Highlights } from "../feishu.ts";
 
 const BASE_URL = "https://example.com/radar";
 
@@ -21,7 +21,7 @@ describe("buildFeishuMessage", () => {
       ["ai-cli", "ai-cli-en", "ai-agents", "ai-agents-en"],
       BASE_URL,
     );
-    expect(msg).toContain("agents-radar");
+    expect(msg).toContain("AI 科研雷达");
     expect(msg).toContain("2026-03-09");
     expect(msg).toContain("📡");
     expect(msg).toContain(`[AI CLI 工具](${BASE_URL}/#2026-03-09/ai-cli)`);
@@ -45,7 +45,7 @@ describe("buildFeishuMessage", () => {
     const msg = buildFeishuMessage("2026-03-09", ["ai-cli", "ai-cli-en"], BASE_URL);
     expect(msg).not.toContain("<a href=");
     expect(msg).not.toContain("<b>");
-    expect(msg).toContain("**agents-radar");
+    expect(msg).toContain("**AI 科研雷达");
     expect(msg).toContain(`[AI CLI 工具](`);
   });
 
