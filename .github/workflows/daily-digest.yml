@@ -13,10 +13,9 @@ permissions:
   contents: write
 
 # A late scheduled run must not overlap a manual catch-up run: both would build
-# the same CST day's digest and open a duplicate set of issues (as happened on
-# 2026-08-27, which produced 18 duplicates). Queue rather than cancel, so the
-# scheduled run reaches the guard job below only after the manual one has
-# committed its digest — and then skips.
+# the same CST day's digest and race on the archive commits. Queue rather than
+# cancel, so the scheduled run reaches the guard job below only after the manual
+# one has committed its digest — and then skips.
 concurrency:
   group: daily-digest
   cancel-in-progress: false
