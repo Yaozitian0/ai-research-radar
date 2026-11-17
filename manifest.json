@@ -1,9 +1,15 @@
 {
-  "generated": "2026-11-17T04:48:59.753Z",
+  "generated": "2026-11-17T14:18:09.889Z",
   "dates": [
     {
       "date": "2026-11-17",
       "reports": [
+        "radar-picks",
+        "radar-llm-agent",
+        "radar-rl",
+        "radar-rag-nlp",
+        "radar-multimodal-cv",
+        "radar-ai-general",
         "ai-cli",
         "ai-cli-en",
         "ai-agents",
